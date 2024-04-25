@@ -1,3 +1,8 @@
+## Ping Sweep One-Liner (esp if nmap doesn't exist)
+```
+for i in {1..255}; do (ping -c 1 192.168.1.${i} | grep "bytes from" &); done
+```
+
 ## Reverse Shell Stabilization
 ```
 python3 -c 'import pty;pty.spawn("/bin/bash")'
