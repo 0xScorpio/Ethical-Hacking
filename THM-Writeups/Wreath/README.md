@@ -1,32 +1,35 @@
-### Overview - objectives
+## Overview - objectives
 - Pivoting
 - Working with the Empire C2 framework
 - Simple AV evasion techniques
 
 *Please upload files/shells in the format: `toolname-username`*
 
-### Brief
-*There are ==two machines on my home network that host projects and stuff== I'm working on in my own time -- one of them has a webserver that's port forwarded, so that's your way in if you can find a vulnerability! It's serving a website that's pushed to ==my git server from my own PC for version control==, then cloned to the public facing server. See if you can get into these! My own PC is also on that network, but I doubt you'll be able to get into that as it has protections turned on, doesn't run anything vulnerable, and can't be accessed by the public-facing section of the network. Well, I say PC -- it's technically a repurposed server because I had a spare license lying around, but same difference.*
+## Brief
+*There are **two machines on my home network that host projects and stuff** I'm working on in my own time -- one of them has a webserver that's port forwarded, so that's your way in if you can find a vulnerability! It's serving a website that's pushed to ==my git server from my own PC for version control==, then cloned to the public facing server. See if you can get into these! My own PC is also on that network, but I doubt you'll be able to get into that as it has protections turned on, doesn't run anything vulnerable, and can't be accessed by the public-facing section of the network. Well, I say PC -- it's technically a repurposed server because I had a spare license lying around, but same difference.*
 
-### Enumeration
-Nmap scan showed:
-Discovered open port 443/tcp on 10.200.84.200
-Discovered open port 22/tcp on 10.200.84.200
-Discovered open port 80/tcp on 10.200.84.200
-Discovered open port 10000/tcp on 10.200.84.200
+## Enumeration
+Nmap scan showed:<br>
+<br>Discovered open port 443/tcp on 10.200.84.200
+<br>Discovered open port 22/tcp on 10.200.84.200
+<br>Discovered open port 80/tcp on 10.200.84.200
+<Br>Discovered open port 10000/tcp on 10.200.84.200
 
 DNS wasn't set properly so we had to add it into our hosts file.
 
-Quick glance on webpage disclosed some basic information: [[Information Disclosure]]
+Quick glance on webpage disclosed some basic information: <br>
+<br>Phone number: 01347 822945
+<br>Mobile number: +447821548812
+<br>Email: me@thomaswreath.thm
 
-Service check for port 10000 pointed us to `MiniServ 1.890 (Webmin httpd)` which current version has a public exploit `CVE-2019-15107` - https://www.rapid7.com/db/vulnerabilities/http-webmin-cve-2019-15107/
+Service check (-sV) for port 10000 pointed us to `MiniServ 1.890 (Webmin httpd)` which current version has a public exploit `CVE-2019-15107` - https://www.rapid7.com/db/vulnerabilities/http-webmin-cve-2019-15107/
 
 ![[Pasted image 20240425144739.png]]
 
 The exploit itself allows for command injection - and unfortunately, directly as root:
 ![[Pasted image 20240425145309.png]]
 
-### Exploitation
+## Exploitation
 
 Since the CVE exploit script runs per session, we can only place one command at a time. Due to this, we can't just place a reverse shell as a command directly, but instead, we can pull and run the reverse shell script with curl.
 
@@ -93,7 +96,7 @@ Like most traditional corporate architectures, Wreath has a similar setup with h
 ![[Pasted image 20240425170330.png]]
 Therefore, to move past the public-facing web server and into the internal network, we'll need to pivot.
 
-### Pivoting
+## Pivoting
 
 There are 2 main methods within pivoting:
 - ==**Tunnelling/Proxying:**== Creating a proxy type connection through a compromised machine in order to route all desired traffic into the targeted network. This could potentially also be _tunnelled_ inside another protocol (e.g. SSH tunnelling), which can be useful for evading a basic **I**ntrusion **D**etection **S**ystem (IDS) or firewall.
@@ -203,7 +206,7 @@ Things to note about proxychains:
 - IT IS SLOWWWWW
 - Can only use TCP scans. No UDP, SYN or ICMP, so make sure to use the -Pn flag.
 
-### Forward Connections
+## Forward Connections
 
 Creating a forward (or "local") SSH tunnel can be done from our attacking box ==when we have SSH access to the target.== As such, this technique is much more commonly used against Unix hosts. Linux servers, in particular, commonly have SSH active and open. That said, Microsoft (relatively) recently brought out their own implementation of the OpenSSH server, native to Windows, so this technique may begin to get more popular in this regard if the feature were to gain more traction.
 
@@ -223,7 +226,7 @@ ssh -D 1337 user@COMPROMISED-TARGET-IP -fN
 
 This will open up port 1337 on our attacking machine as a proxy to send data through. This is useful when combined with ProxyChains.
 
-### Reverse Connections
+## Reverse Connections
 
 Ideal when you have a ==shell on the compromised server but NOT ssh access.== They are riskier since you must access your attacker machine *through* the target. Therefore a few steps need to be done before we create a reverse connection safely:
 
