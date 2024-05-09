@@ -8,7 +8,13 @@ Assuming SMB Signing has been disabled on the target, start with a confirmation 
 ```bash
 nmap -script=smb2-security-mode.nse -p 445 TARGET-IP
 ```
+![image](https://github.com/0xScorpio/Ethical-Hacking/assets/140411254/a0d110ff-bdaf-4138-9f7e-34a53287aa2e)
+
 In order to relay the hashes, we'll need to edit the configuration file [responder.conf] with SMB to 'Off' and HTTP to 'Off'.<br>
+
+![image](https://github.com/0xScorpio/Ethical-Hacking/assets/140411254/3b219178-b593-4ff4-9b6b-1caa42e92768)
+
+
 Then proceed with listening for events:
 ```bash
 sudo responder -I eth0 -dPv
