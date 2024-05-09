@@ -3,6 +3,9 @@ LLMNR is a protocol that allows both IPv4 and IPv6 hosts to perform name resolut
 When a host’s DNS query fails (i.e., the DNS server doesn’t know the name), the host broadcasts an LLMNR request on the local network to see if any other host can answer. <br><br>
 LLMNR is the successor to NetBIOS.  NetBIOS (Network Basic Input/Output System) is an older protocol that was heavily used in early versions of Windows networking. NBT-NS is a component of NetBIOS over TCP/IP (NBT) and is responsible for name registration and resolution.  Like LLMNR, NBT-NS is a fallback protocol when DNS resolution fails. It allows local name resolution within a LAN.
 
+![image](https://github.com/0xScorpio/Ethical-Hacking/assets/140411254/bbe32f35-a9f9-4471-88ee-8433fb5334ab)
+
+
 ## Exploitation [EASY]
 Listen for LLMNR requests and respond with our own attacker IP address, to redirect the traffic:
 ```bash
