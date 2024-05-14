@@ -16,12 +16,14 @@ Once the relay server is set up, we'll want to finally run MITM6:
 ```bash
 sudo mitm6 -d DOMAIN.local
 ```
+> [!NOTE]
 *Of course, this attack must be run on the internal network. From my experience as a penetration tester, if you started the pen-test externally, then using eth0 (or whatever you local network interface is) will be fine. However, if you've been given a VPN to start you pen-test directly from an internal instance, then make sure to switch the interface flag to your VPN interface: ` -i tun0 `, for example.*
 
 And that's literally it!
 For the most part, we're waiting for an event to occur. Events could be a user or admin logging into their device, rebooting their machine, accessing a file share, etc. Any network event that occurs will allow us to grab the NTLM hash and relay it over.
 
-*NOTE! Make sure to run this in small sprints of 5-10 minutes - else it could case network outages. Remember, we're impersonating the DNS server, so there's a chance that we can break the synchronization between our rogue DNS and the actual dedicated DNS server within the client environment... unless for some reason your end-goal is denial-of-service.*
+> [!NOTE]
+Make sure to run this in small sprints of 5-10 minutes - else it could case network outages. Remember, we're impersonating the DNS server, so there's a chance that we can break the synchronization between our rogue DNS and the actual dedicated DNS server within the client environment... unless for some reason your end-goal is denial-of-service.*
 
 ## Results
 Let's create a scenario of an administrator logging into their laptop within the network.
@@ -32,4 +34,5 @@ As you can see, a user is created and instantly added into the ENTERPRISE ADMINS
 
 The username and password is printed out for us as well for local authentication, say on the domain controller (because why not?). 
 
+> [!WARNING]
 This is quite severe because now we've opened the doors to post-compromise attacks like a possible a Kerberos Golden Ticket attack (although stick with Silver Tickets for stealthy operations... shhh) as well as the infamous DCSync attacks (this attack is easily performed assuming you have the credentials of a Domain Admin or Enterprise Admin account) - which is the ideal attack for most corporate environments that have multiple clustered domain controllers for basic load-balancing.
