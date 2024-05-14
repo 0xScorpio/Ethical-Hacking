@@ -23,9 +23,10 @@ As well as, set up a relay:
 ```bash
 sudo ntlmrelayx.py -tf targets.txt -smb2support
 ```
-*You can also add the following flags: 
-- i for interactive mode (if you're using this mode, create a listener on the specified port)
-- c for executing commands
+> [!NOTE]
+You can also add the following flags: 
+> - i for interactive mode (if you're using this mode, create a listener on the specified port)
+> - c for executing commands
 
 ## Mitigation
 - Enable SMB signing on all devices (bare in mind, this can cause performance issues with file copies especially on legacy systems)
