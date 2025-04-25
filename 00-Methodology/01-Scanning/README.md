@@ -1,6 +1,11 @@
 ## 01 - Scanning
 Assuming all pre-requisite due diligence and research regarding the target(s) has been completed, it's time to scan for possible attack vectors.
 <br>
+### CONTENT
+| Script Name | Description |
+| --- | --- |
+| `scorpio_scan.sh` | My automated version of running a full-scale scan on a target IP |
+---
 * **WEB PAGES**:
   - [ ] Login panels and admin pages (injections, default creds, versions, etc.)
   - [ ] Request/Contact Forms, Comment boxes (anything that allows user input)
@@ -19,7 +24,4 @@ Assuming all pre-requisite due diligence and research regarding the target(s) ha
   - [ ] Profiling & Preferences (create custom dictionaries)
   - [ ] Social Engineering (Main information gathering -> Sock puppets) 
 ---
-### CONTENT
-| Script Name | Description |
-| --- | --- |
-| `scorpio_scan.sh` | My automated version of running a full-scale scan on a target IP |
+
