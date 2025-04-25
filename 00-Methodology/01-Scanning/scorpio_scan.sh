@@ -1,43 +1,65 @@
 #!/bin/bash
 
-# Check if at least one IP is provided, but not more than 4
-if [ $# -lt 1 ] || [ $# -gt 4 ]; then
-  echo "Usage: $0 <IP1> [IP2] [IP3] [IP4]"
+# Exit on error
+set -e
+
+# Usage check
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 <IP=HOSTNAME> [<IP=HOSTNAME> ...]"
+  echo "Example: $0 10.0.0.1=web 10.0.0.2=db"
   exit 1
 fi
 
-COMMANDS=("recon") # Base commands
+# Define base commands to be customized per target
+BASE_COMMANDS=(
+  "recon"                                        # Command 1
+  "nmap -p- -sC -sV -O -v -oX"                   # Command 2, needs hostname + IP
+  "scan -a"                                      # Command 3
+)
 
-# Function to execute commands in a split terminal dynamically
-run_in_splits() {
-  local base_cmd="$1"
-  shift  # Remove the first argument (base_cmd), leaving only IPs
-  local ips=("$@")
+# Get the original terminal window ID
+ORIGINAL_WIN_ID=$(xdotool getactivewindow)
 
-  xdotool type "$base_cmd ${ips[0]}" && xdotool key Return && sleep 2
+# Loop through all IP=HOSTNAME pairs
+for TARGET in "$@"; do
+  # Split input into IP and HOSTNAME
+  IFS='=' read -r IP HOSTNAME <<< "$TARGET"
 
-  for ((i = 1; i < ${#ips[@]}; i++)); do
-    if ((i == 1)); then
-      xdotool key ctrl+shift+r  # First split (Right)
-    else
-      xdotool key ctrl+shift+d  # Subsequent splits (Down)
-    fi
+  if [[ -z "$IP" || -z "$HOSTNAME" ]]; then
+    echo "Invalid input: '$TARGET'. Expected format: <IP>=<HOSTNAME>"
+    continue
+  fi
+
+  # Open a new tab for this target
+  xdotool key --window "$ORIGINAL_WIN_ID" ctrl+shift+t
+  sleep 1
+
+  # Re-focus the terminal (safety)
+  xdotool windowactivate --sync "$ORIGINAL_WIN_ID"
+  sleep 0.5
+
+  # Define full commands to run
+  COMMANDS=(
+    "${BASE_COMMANDS[0]} $IP"
+    "${BASE_COMMANDS[1]} ${HOSTNAME}.xml $IP"
+    "${BASE_COMMANDS[2]} $IP"
+  )
+
+  # Run the first command in the default pane
+  xdotool type --window "$ORIGINAL_WIN_ID" "${COMMANDS[0]}"
+  xdotool key --window "$ORIGINAL_WIN_ID" Return
+  sleep 1
+
+  # Run remaining commands in split panes
+  for ((i = 1; i < ${#COMMANDS[@]}; i++)); do
+    # Split the pane (Ctrl+Shift+D)
+    xdotool key --window "$ORIGINAL_WIN_ID" ctrl+shift+r
+    sleep 1
+    xdotool windowactivate --sync "$ORIGINAL_WIN_ID"
     sleep 0.5
-    xdotool type "$base_cmd ${ips[i]}" && xdotool key Return && sleep 2
+    xdotool type --window "$ORIGINAL_WIN_ID" "${COMMANDS[$i]}"
+    xdotool key --window "$ORIGINAL_WIN_ID" Return
+    sleep 0.5
   done
-}
-
-# Run recon command in separate tabs
-for cmd in "${COMMANDS[@]}"; do
-  run_in_splits "$cmd" "$@"
-  xdotool key ctrl+shift+t  # Open a new tab
-  sleep 2
 done
 
-# Run nmap separately for each IP in its own tab
-for ip in "$@"; do
-  nmap_cmd="nmap -p- -sC -sV -O -v -oX ${ip}.xml $ip"
-  xdotool key ctrl+shift+t  # Open a new tab
-  sleep 2
-  xdotool type "$nmap_cmd" && xdotool key Return && sleep 2
-done
