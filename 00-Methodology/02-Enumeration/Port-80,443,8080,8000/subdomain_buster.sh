@@ -1,32 +1,58 @@
 #!/bin/bash
 
-# Ensure at least one and at most four arguments are provided
-if [ $# -lt 1 ] || [ $# -gt 4 ]; then
-  echo "Usage: $0 <target.local> [target.local] [target.local] [target.local]"
+# Ensure exactly one argument
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <target.local>"
   exit 1
 fi
 
-# Commands for subdomain enumeration
-DNS_CMD="gobuster dns -w /usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-110000.txt -t 10 -d"
-VHOST_CMD="gobuster vhost --append-domain --wordlist /usr/share/wordlists/seclists/Discovery/DNS/namelist.txt -u http://"
-VHOST_FILTER="| grep 'Status: 200'"
+TARGET="$1"
 
-# Function to open a new tab, split it, and run commands
-run_in_tab() {
-  local target="$1"
+# Extract main domain part (e.g., oscptarget from internal.oscptarget.local)
+MAIN_DOMAIN=$(echo "$TARGET" | awk -F. '{print $(NF-2)}')
 
-  # Run Gobuster DNS in the first split (default terminal)
-  xdotool type "$DNS_CMD $target" && xdotool key Return
-  sleep 2
+# Wordlists
+SUBDOMAIN_WL="/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-110000.txt"
+VHOST_WL="/usr/share/wordlists/seclists/Discovery/DNS/namelist.txt"
 
-  # Split terminal (DOWN) and run Gobuster VHost
-  xdotool key ctrl+shift+d
-  sleep 2
-  xdotool type "$VHOST_CMD$target $VHOST_FILTER" && xdotool key Return
+# Output filenames
+SUBDOMAIN_OUTPUT="subdomains_${MAIN_DOMAIN}.txt"
+VHOST_RAW_OUTPUT="vhosts_${MAIN_DOMAIN}_raw.json"
+
+# Core commands
+DNS_CMD="gobuster dns -w $SUBDOMAIN_WL -t 50 -d $TARGET -o $SUBDOMAIN_OUTPUT"
+VHOST_CMD_TEMPLATE="ffuf -u http://IP_TARGET/ -w $VHOST_WL -H \"Host: FUZZ.${TARGET}\" -ac -mc 200,301,302 -timeout 10 -o $VHOST_RAW_OUTPUT -of json"
+
+# Function to type a command and run it
+type_and_run() {
+  local cmd="$1"
+  sleep 1
+  xdotool type --delay 1 --clearmodifiers "$cmd"
+  xdotool key Return
 }
 
-# Loop through each argument and create a new tab for each
-for site in "$@"; do
-  run_in_tab "$site"
-done
+# Start
+echo "[*] Resolving IP address for $TARGET..."
+IP=$(dig +short "$TARGET" | head -n 1)
 
+if [ -z "$IP" ]; then
+  echo "[!] Could not resolve IP for $TARGET."
+  exit 1
+fi
+
+# Replace IP placeholder in VHOST_CMD
+VHOST_CMD=$(echo "$VHOST_CMD_TEMPLATE" | sed "s/IP_TARGET/$IP/")
+
+# --- Run DNS enumeration in the current terminal pane ---
+echo "[*] Running subdomain enumeration in current pane..."
+type_and_run "$DNS_CMD"
+
+# --- Split RIGHT and run VHOST fuzzing ---
+sleep 2
+echo "[*] Splitting RIGHT and running VHOST fuzzing..."
+xdotool key ctrl+shift+r
+sleep 2
+type_and_run "$VHOST_CMD"
+
+# Done
+echo "[*] Enumeration setup completed."
