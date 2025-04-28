@@ -1,58 +1,58 @@
 #!/bin/bash
 
-# Ensure at least one and at most four arguments are provided
-if [ $# -lt 1 ] || [ $# -gt 4 ]; then
-  echo "Usage: $0 <IP:PORT> [IP:PORT] [IP:PORT] [IP:PORT]"
+# Ensure exactly one argument
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <target.local>"
   exit 1
 fi
 
-# Commands for directory brute-forcing
-FEROX_CMD="feroxbuster -u http://"
-FEROX_ARGS="-w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-lowercase-2.3-big.txt --filter-status 400,402,403,404,501,502,503,504,505"
+TARGET="$1"
 
-GOBUSTER_CMD="gobuster dir -u http://"
-GOBUSTER_ARGS="-w /usr/share/wordlists/seclists/Discovery/Web-Content/raft-large-directories.txt -t 5 -b 200,301,302"
+# Extract main domain part (e.g., oscptarget from internal.oscptarget.local)
+MAIN_DOMAIN=$(echo "$TARGET" | awk -F. '{print $(NF-2)}')
 
-FFUF_CMD="ffuf -u http://"
-FFUF_FUZZ="/FUZZ"
-FFUF_ARGS="-w /usr/share/wordlists/seclists/Discovery/Web-Content/raft-large-directories.txt -e .php,.html,.asp,.aspx,.bak,.old,.orig,.tmp,.txt,.log,.env,.xml,.json,.yml,.conf,.ini,.zip,.tar,.gz,.rar,.md,.jsp,.sqp,.swo -r -t 100 -mc 200,301,302 -c"
+# Wordlists
+SUBDOMAIN_WL="/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-110000.txt"
+VHOST_WL="/usr/share/wordlists/seclists/Discovery/DNS/namelist.txt"
 
-DIRSEARCH_CMD="dirsearch -u http://"
-DIRSEARCH_ARGS="-w /usr/share/wordlists/seclists/Discovery/Web-Content/common.txt -t 50 --exclude-status 400,401,403,404,503"
+# Output filenames
+SUBDOMAIN_OUTPUT="subdomains_${MAIN_DOMAIN}.txt"
+VHOST_RAW_OUTPUT="vhosts_${MAIN_DOMAIN}_raw.json"
 
-PAGECHECK_CMD="pgcheck http://"
+# Core commands
+DNS_CMD="gobuster dns -w $SUBDOMAIN_WL -t 50 -d $TARGET -o $SUBDOMAIN_OUTPUT"
+VHOST_CMD_TEMPLATE="ffuf -u http://IP_TARGET/ -w $VHOST_WL -H \"Host: FUZZ.${TARGET}\" -ac -mc 200,301,302 -timeout 10 -o $VHOST_RAW_OUTPUT -of json"
 
-# Function to open a new tab, split it, and run commands
-run_in_tab() {
-  local target="$1"
-
-  # Run Feroxbuster in the first split (default terminal)
-  xdotool type "$FEROX_CMD$target $FEROX_ARGS" && xdotool key Return
-  sleep 2
-  
-  # Split terminal (RIGHT) and run GoBuster
-  xdotool key ctrl+shift+r
-  xdotool type "$GOBUSTER_CMD$target $GOBUSTER_ARGS" && xdotool key Return
-  sleep 2
-
-  # Split terminal (DOWN) and run FFUF
-  xdotool key ctrl+shift+d
-  xdotool type "$FFUF_CMD$target$FFUF_FUZZ $FFUF_ARGS" && xdotool key Return
-  sleep 2
-  
-  # Split terminal (DOWN) and run Dirsearch
-  xdotool key ctrl+shift+d
-  sleep 2
-  xdotool type "$DIRSEARCH_CMD$target $DIRSEARCH_ARGS" && xdotool key Return
-  
-  # Split terminal (DOWN) and run pgcheck
-  xdotool key ctrl+shift+d
-  sleep 2
-  xdotool type "$PAGECHECK_CMD$target" && xdotool key Return
+# Function to type a command and run it
+type_and_run() {
+  local cmd="$1"
+  sleep 1
+  xdotool type --delay 1 --clearmodifiers "$cmd"
+  xdotool key Return
 }
 
-# Loop through each argument and create a new tab for each
-for site in "$@"; do
-  run_in_tab "$site"
-done
+# Start
+echo "[*] Resolving IP address for $TARGET..."
+IP=$(dig +short "$TARGET" | head -n 1)
 
+if [ -z "$IP" ]; then
+  echo "[!] Could not resolve IP for $TARGET."
+  exit 1
+fi
+
+# Replace IP placeholder in VHOST_CMD
+VHOST_CMD=$(echo "$VHOST_CMD_TEMPLATE" | sed "s/IP_TARGET/$IP/")
+
+# --- Run DNS enumeration in the current terminal pane ---
+echo "[*] Running subdomain enumeration in current pane..."
+type_and_run "$DNS_CMD"
+
+# --- Split RIGHT and run VHOST fuzzing ---
+sleep 2
+echo "[*] Splitting RIGHT and running VHOST fuzzing..."
+xdotool key ctrl+shift+r
+sleep 2
+type_and_run "$VHOST_CMD"
+
+# Done
+echo "[*] Enumeration setup completed."
