@@ -13,56 +13,132 @@
 #
 # ~ 0xScorpio
 
+set -euo pipefail
+
+### -------------------------------
+### Input validation
+### -------------------------------
+
 if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 http(s)://<domain or IP>"
+    echo "Usage: $0 <domain>"
     exit 1
 fi
 
-TARGET="$1"
+TARGET_RAW="$1"
 
-# Determine if IP or domain
-if [[ "$TARGET" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    IP="$TARGET"
-    HOSTNAME="target"
-else
-    IP=$(dig +short "$TARGET" | head -n 1)
-    if [ -z "$IP" ]; then
-        echo "[!] Could not resolve IP for $TARGET."
-        exit 1
-    fi
-    HOSTNAME=$(echo "$TARGET" | awk -F. '{print $(NF-2)}')
+# Strip scheme if user passed URL
+TARGET="${TARGET_RAW#http://}"
+TARGET="${TARGET#https://}"
+TARGET="${TARGET%%/*}"
+
+# Reject IPs (DNS enumeration does not apply)
+if [[ "$TARGET" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    echo "[!] IP address supplied. DNS-based subdomain enumeration requires a domain."
+    exit 1
 fi
 
-# Wordlists for enumeration
+### -------------------------------
+### Dependency checks
+### -------------------------------
+
+for bin in gobuster ffuf sublist3r dig xdotool; do
+    command -v "$bin" >/dev/null 2>&1 || {
+        echo "[!] Missing dependency: $bin"
+        exit 1
+    }
+done
+
+### -------------------------------
+### DNS resolution
+### -------------------------------
+
+IP="$(dig +short A "$TARGET" | head -n 1)"
+if [ -z "$IP" ]; then
+    echo "[!] Failed to resolve A record for $TARGET"
+    exit 1
+fi
+
+HOSTNAME="$(echo "$TARGET" | awk -F. '{print $(NF-1)}')"
+
+### -------------------------------
+### Wordlists
+### -------------------------------
+
 SUBDOMAIN_WL="/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-110000.txt"
 VHOST_WL="/usr/share/wordlists/seclists/Discovery/DNS/namelist.txt"
-SUBLIST3R_WL="/usr/share/wordlists/seclists/Discovery/DNS/active-subdomains.txt"
 
-# Output files
+for wl in "$SUBDOMAIN_WL" "$VHOST_WL"; do
+    [ -f "$wl" ] || { echo "[!] Missing wordlist: $wl"; exit 1; }
+done
+
+### -------------------------------
+### Output files
+### -------------------------------
+
 SUBDOMAIN_OUT="subdomains_${HOSTNAME}.txt"
-VHOST_OUT="vhosts_${HOSTNAME}_raw.json"
-SUBLIST3R_OUT="sublist3r_${HOSTNAME}_subdomains.txt"
+VHOST_OUT="vhosts_${HOSTNAME}.json"
+SUBLIST3R_OUT="sublist3r_${HOSTNAME}.txt"
 
-# Commands for subdomain enumeration
-GOBUSTER_CMD="gobuster dns -d $TARGET -w $SUBDOMAIN_WL -t 50 -o $SUBDOMAIN_OUT"
-FFUF_CMD="ffuf -u http://$IP/ -w $VHOST_WL -H \"Host: FUZZ.$TARGET\" -ac -mc 200,301,302 -timeout 10 -o $VHOST_OUT -of json"
-SUBLIST3R_CMD="sublist3r -d $TARGET -o $SUBLIST3R_OUT"
+### -------------------------------
+### Tool commands (corrected)
+### -------------------------------
 
-# Function to open new tab, split, and run commands
+# Gobuster DNS mode — domain only, sane thread count, wildcard detection
+GOBUSTER_CMD=(
+    gobuster dns
+    --domain "$TARGET"
+    -w "$SUBDOMAIN_WL"
+    -t 40
+    --timeout 3s
+    --wildcard
+    -o "$SUBDOMAIN_OUT"
+)
+
+# FFUF virtual host discovery
+# - Host header fuzzing
+# - Baseline filtering via auto-calibration
+# - Match common web response codes
+FFUF_CMD=(
+    ffuf
+    -u "http://$IP/"
+    -w "$VHOST_WL"
+    -H "Host: FUZZ.$TARGET"
+    -ac
+    -mc 200,204,301,302,307,401,403
+    -timeout 10
+    -of json
+    -o "$VHOST_OUT"
+)
+
+# Sublist3r — passive enum only
+SUBLIST3R_CMD=(
+    sublist3r
+    -d "$TARGET"
+    -o "$SUBLIST3R_OUT"
+)
+
+### -------------------------------
+### Execution (window logic preserved)
+### -------------------------------
+
 run_in_tab() {
-  # Run Gobuster (subdomain enumeration)
-  xdotool type "$GOBUSTER_CMD" && xdotool key Return
-  sleep 2
-  
-  # Split terminal (RIGHT) and run FFUF (VHost fuzzing)
-  xdotool key ctrl+shift+r
-  xdotool type "$FFUF_CMD" && xdotool key Return
-  sleep 2
 
-  # Split terminal (DOWN) and run Sublist3r (subdomain enumeration)
-  xdotool key ctrl+shift+d
-  xdotool type "$SUBLIST3R_CMD" && xdotool key Return
+    # Gobuster
+    xdotool type "${GOBUSTER_CMD[*]}"
+    xdotool key Return
+    sleep 2
+
+    # Split RIGHT → FFUF
+    xdotool key ctrl+shift+r
+    xdotool type "ffuf -u http://$IP/ -w $VHOST_WL -H 'Host: FUZZ.$TARGET' -ac -mc 200,204,301,302,307,401,403 -timeout 10 -of json -o $VHOST_OUT"
+    xdotool key Return
+    sleep 2
+
+    # Split DOWN → Sublist3r
+    xdotool key ctrl+shift+d
+    xdotool type "${SUBLIST3R_CMD[*]}"
+    xdotool key Return
 }
 
-# Start the workflow
 run_in_tab
+
