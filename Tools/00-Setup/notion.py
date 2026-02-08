@@ -10,8 +10,8 @@ from notion_client import Client
 # CONFIG
 # =========================
 
-NOTION_TOKEN = "############################################"
-PARENT_PAGE_ID = "##########################################"  
+NOTION_TOKEN = "##########"
+PARENT_PAGE_ID = "#########"  
 RATE_LIMIT_DELAY = 0.35  # seconds
 
 # =========================
@@ -29,6 +29,12 @@ def clean(text):
 # =========================
 
 def parse_nmap_xml(xml_file):
+    # Check file is not empty and starts with '<'
+    with open(xml_file, "rb") as f:
+        content = f.read().strip()
+        if not content.startswith(b"<"):
+            raise ValueError(f"{xml_file} does not appear to be valid XML.")
+
     tree = etree.parse(xml_file)
     root = tree.getroot()
 
@@ -38,20 +44,24 @@ def parse_nmap_xml(xml_file):
     ports_data = []
 
     for port in host.findall(".//port"):
-        state = port.find("state").get("state")
-        if state != "open":
+        state_elem = port.find("state")
+        if state_elem is None or state_elem.get("state") != "open":
             continue
 
         proto = port.get("protocol")
         portid = port.get("portid")
 
         service = port.find("service")
-        svc_name = service.get("name", "")
-        svc_version = " ".join(filter(None, [
-            service.get("product"),
-            service.get("version"),
-            service.get("extrainfo")
-        ]))
+        if service is not None:
+            svc_name = service.get("name", "")
+            svc_version = " ".join(filter(None, [
+                service.get("product"),
+                service.get("version"),
+                service.get("extrainfo")
+            ]))
+        else:
+            svc_name = ""
+            svc_version = ""
 
         scripts = []
         for script in port.findall("script"):
