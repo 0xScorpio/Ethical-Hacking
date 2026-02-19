@@ -27,7 +27,7 @@ fi
 
 # Define base commands to be customized per target
 BASE_COMMANDS=(
-  "recon"                                        # Command 1
+  "autorecon"                                    # Command 1
   "nmap -p- -sC -sV -O -Pn --open -v -oX"        # Command 2
   "scan -a"                                      # Command 3
 )
