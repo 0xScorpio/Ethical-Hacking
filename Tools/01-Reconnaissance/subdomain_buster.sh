@@ -3,13 +3,19 @@
 # =============== DESCRIPTION ===============
 #
 # This script runs a set of subdomain enumeration tools on a given domain.
-# Specifically, it runs Gobuster, FFUF, and Sublist3r to cover as many bases as possible.
+# Specifically, it runs FFUF, Gobuster, and Sublist3r to cover as many bases as possible.
 #
-# gobuster ------> Subdomain brute-forcing using the subdomains-top1million-110000.txt wordlist
+# ffuf ----------> Virtual host discovery using namelist.txt (run FIRST — found
+#                  vhosts need to be added to /etc/hosts before further enum)
 #
-# ffuf ----------> Virtual host discovery using the namelist.txt wordlist
+# gobuster ------> Subdomain brute-forcing using subdomains-top1million-110000.txt
 #
-# sublist3r ----- > SUBLISTER!
+# sublist3r -----> Passive subdomain enumeration
+#
+# Accepts flexible input:
+#   ./subdomain_buster.sh test.local
+#   ./subdomain_buster.sh http://test.local
+#   ./subdomain_buster.sh https://test.local:8443/path
 #
 # ~ 0xScorpio
 
@@ -21,21 +27,37 @@ set -euo pipefail
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <domain>"
+    echo ""
+    echo "Examples:"
+    echo "  $0 test.local"
+    echo "  $0 http://test.local"
+    echo "  $0 https://test.local:8443"
     exit 1
 fi
 
-TARGET_RAW="$1"
+RAW="$1"
 
-# Strip scheme if user passed URL
-TARGET="${TARGET_RAW#http://}"
-TARGET="${TARGET#https://}"
-TARGET="${TARGET%%/*}"
+# Strip scheme
+RAW="${RAW#http://}"
+RAW="${RAW#https://}"
+# Strip path / trailing slashes
+RAW="${RAW%%/*}"
+# Strip port
+TARGET="${RAW%%:*}"
 
-# Reject IPs (DNS enumeration does not apply)
+# Reject empty input
+if [ -z "$TARGET" ]; then
+    echo "[!] Could not parse a domain from the input."
+    exit 1
+fi
+
+# Reject bare IPs (DNS enumeration does not apply)
 if [[ "$TARGET" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
     echo "[!] IP address supplied. DNS-based subdomain enumeration requires a domain."
     exit 1
 fi
+
+echo "[*] Target domain: $TARGET"
 
 ### -------------------------------
 ### Dependency checks
@@ -52,11 +74,13 @@ done
 ### DNS resolution
 ### -------------------------------
 
-IP="$(dig +short A "$TARGET" | head -n 1)"
+IP="$(dig +short A "$TARGET" | grep -E '^[0-9]+\.' | head -n 1)"
 if [ -z "$IP" ]; then
     echo "[!] Failed to resolve A record for $TARGET"
     exit 1
 fi
+
+echo "[*] Resolved $TARGET -> $IP"
 
 HOSTNAME="$(echo "$TARGET" | awk -F. '{print $(NF-1)}')"
 
@@ -80,65 +104,42 @@ VHOST_OUT="vhosts_${HOSTNAME}.json"
 SUBLIST3R_OUT="sublist3r_${HOSTNAME}.txt"
 
 ### -------------------------------
-### Tool commands (corrected)
+### Tool commands
 ### -------------------------------
 
-# Gobuster DNS mode — domain only, sane thread count, wildcard detection
-GOBUSTER_CMD=(
-    gobuster dns
-    --domain "$TARGET"
-    -w "$SUBDOMAIN_WL"
-    -t 40
-    --timeout 3s
-    --wildcard
-    -o "$SUBDOMAIN_OUT"
-)
+# FFUF virtual host discovery (FIRST — results need /etc/hosts entries)
+# - Host header fuzzing against resolved IP
+# - Auto-calibration filters false positives
+FFUF_CMD="ffuf -u http://$IP/ -w $VHOST_WL -H 'Host: FUZZ.$TARGET' -ac -mc 200,204,301,302,307,401,403 -timeout 10 -of json -o $VHOST_OUT"
 
-# FFUF virtual host discovery
-# - Host header fuzzing
-# - Baseline filtering via auto-calibration
-# - Match common web response codes
-FFUF_CMD=(
-    ffuf
-    -u "http://$IP/"
-    -w "$VHOST_WL"
-    -H "Host: FUZZ.$TARGET"
-    -ac
-    -mc 200,204,301,302,307,401,403
-    -timeout 10
-    -of json
-    -o "$VHOST_OUT"
-)
+# Gobuster DNS mode — subdomain brute-force with wildcard detection
+GOBUSTER_CMD="gobuster dns --domain $TARGET -w $SUBDOMAIN_WL -t 40 --timeout 3s --wildcard -o $SUBDOMAIN_OUT"
 
 # Sublist3r — passive enum only
-SUBLIST3R_CMD=(
-    sublist3r
-    -d "$TARGET"
-    -o "$SUBLIST3R_OUT"
-)
+SUBLIST3R_CMD="sublist3r -d $TARGET -o $SUBLIST3R_OUT"
 
 ### -------------------------------
-### Execution (window logic preserved)
+### Execution (xdotool window splitting)
 ### -------------------------------
 
 run_in_tab() {
-
-    # Gobuster
-    xdotool type "${GOBUSTER_CMD[*]}"
+    # FFUF vhost discovery (priority — need results for /etc/hosts)
+    xdotool type -- "$FFUF_CMD"
     xdotool key Return
     sleep 2
 
-    # Split RIGHT → FFUF
+    # Split RIGHT → Gobuster DNS
     xdotool key ctrl+shift+r
-    xdotool type "ffuf -u http://$IP/ -w $VHOST_WL -H 'Host: FUZZ.$TARGET' -ac -mc 200,204,301,302,307,401,403 -timeout 10 -of json -o $VHOST_OUT"
+    sleep 1
+    xdotool type -- "$GOBUSTER_CMD"
     xdotool key Return
     sleep 2
 
     # Split DOWN → Sublist3r
     xdotool key ctrl+shift+d
-    xdotool type "${SUBLIST3R_CMD[*]}"
+    sleep 1
+    xdotool type -- "$SUBLIST3R_CMD"
     xdotool key Return
 }
 
 run_in_tab
-
