@@ -6,23 +6,62 @@
 # Specifically, it runs feroxbuster, gobuster, ffuf and dirsearch.
 # To cover as many bases possible, I have set the following wordlists and checks:
 #
-# feroxbuster ---> directory-list-lowercase-2.3-big.txt
+# feroxbuster ---> raft-large-directories-lowercase.txt
 #
-# gobuster ------> raft-large-directories.txt
+# gobuster ------> big.txt
 #
-# ffuf ----------> raft-large-directories.txt with common extensions
+# ffuf ----------> DirBuster-2007_directory-list-lowercase-2.3-big.txt with common extensions
 #
 # dirsearch -----> common.txt with common extensions
+#
+# Accepts flexible input:
+#   ./directory_buster.sh 10.10.10.1
+#   ./directory_buster.sh 10.10.10.1:8080
+#   ./directory_buster.sh test.local
+#   ./directory_buster.sh http://10.10.10.1
+#   ./directory_buster.sh https://test.local:8443
 #
 # ~ 0xScorpio
 
 # Ensure exactly one argument is provided
 if [ "$#" -ne 1 ]; then
-	echo "Usage: $0 http(s)://<IP:PORT>"
+  echo "Usage: $0 <target>"
+  echo ""
+  echo "Examples:"
+  echo "  $0 10.10.10.1"
+  echo "  $0 10.10.10.1:8080"
+  echo "  $0 test.local"
+  echo "  $0 http://10.10.10.1"
+  echo "  $0 https://test.local:8443"
   exit 1
 fi
 
-TARGET="$1"
+RAW="$1"
+
+# Strip trailing slashes
+RAW="${RAW%/}"
+
+# Normalize: extract scheme and host:port
+if [[ "$RAW" =~ ^https?:// ]]; then
+  # Already has a scheme — use as-is
+  TARGET="$RAW"
+else
+  # No scheme provided — extract port to decide http vs https
+  if [[ "$RAW" =~ :([0-9]+)$ ]]; then
+    PORT="${BASH_REMATCH[1]}"
+  else
+    PORT=""
+  fi
+
+  # Default to https for common SSL ports, http otherwise
+  if [[ "$PORT" == "443" || "$PORT" == "8443" ]]; then
+    TARGET="https://$RAW"
+  else
+    TARGET="http://$RAW"
+  fi
+fi
+
+echo "[*] Target normalized to: $TARGET"
 
 # Commands for directory brute-forcing
 FEROX_CMD="feroxbuster --url $TARGET --depth 3 --wordlist /usr/share/wordlists/seclists/Discovery/Web-Content/raft-large-directories-lowercase.txt --filter-status 400,402,403,404,501,502,503,504,505 --extract-links --quiet --insecure"
@@ -33,23 +72,25 @@ DIRSEARCH_CMD="dirsearch --url $TARGET --wordlists /usr/share/wordlists/seclists
 # Function to open new tab, split, and run commands
 run_in_tab() {
   # Run Feroxbuster
-  xdotool type "$FEROX_CMD" && xdotool key Return
+  xdotool type -- "$FEROX_CMD" && xdotool key Return
   sleep 2
   
   # Split terminal (RIGHT) and run GoBuster
   xdotool key ctrl+shift+r
-  xdotool type "$GOBUSTER_CMD" && xdotool key Return
+  sleep 1
+  xdotool type -- "$GOBUSTER_CMD" && xdotool key Return
   sleep 2
 
   # Split terminal (DOWN) and run FFUF
   xdotool key ctrl+shift+d
-  xdotool type "$FFUF_CMD" && xdotool key Return
+  sleep 1
+  xdotool type -- "$FFUF_CMD" && xdotool key Return
   sleep 2
   
   # Split terminal (DOWN) and run Dirsearch
   xdotool key ctrl+shift+d
-  sleep 2
-  xdotool type "$DIRSEARCH_CMD" && xdotool key Return
+  sleep 1
+  xdotool type -- "$DIRSEARCH_CMD" && xdotool key Return
 }
 
 # Start the workflow
