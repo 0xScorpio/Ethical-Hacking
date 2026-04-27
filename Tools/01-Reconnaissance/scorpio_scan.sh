@@ -125,7 +125,7 @@ for TARGET in "$@"; do
     AUTORECON_CMD="sudo autorecon --exclude-tags brute --port-scans nmap-tcp-all $IP"
 
     # [3] Nmap UDP — top 1000 UDP ports with aggressive detection
-    NMAP_UDP_CMD="sudo nmap -sU -A --top-ports 1000 -Pn -v $IP"
+    NMAP_UDP_CMD="sudo nmap -sU -sV -A --top-ports 120 -Pn -v $IP"
 
     # ----------------------------------------------------------------
     #  EXECUTION (xdotool terminal splitting)
@@ -162,7 +162,7 @@ done
 echo ""
 echo "[*] All scans launched."
 echo "[*] QUICK REFERENCE:"
-echo "    - Nmap XML output → use with cherrymap or other parsers"
+echo "    - Nmap XML output → use with cherrymap or other notion parsers"
 echo "    - UDP scan is slow → check periodically for results"
 echo ""
 echo "[*] NEXT STEPS:"
